@@ -575,8 +575,7 @@ const file_blog_proto_rawDesc = "" +
 	"DeletePost\x12\x17.blog.DeletePostRequest\x1a\x13.blog.EmptyResponse\"\x1b\x82\xd3\xe4\x93\x02\x15*\x13/v1/posts/{post_id}\x12X\n" +
 	"\bLikePost\x12\x15.blog.LikePostRequest\x1a\x13.blog.EmptyResponse\" \x82\xd3\xe4\x93\x02\x1a\"\x18/v1/posts/{post_id}/like\x12\\\n" +
 	"\n" +
-	"UnlikePost\x12\x17.blog.UnlikePostRequest\x1a\x13.blog.EmptyResponse\" \x82\xd3\xe4\x93\x02\x1a*\x18/v1/posts/{post_id}/likeB\fZ\n" +
-	"../go;blogb\x06proto3"
+	"UnlikePost\x12\x17.blog.UnlikePostRequest\x1a\x13.blog.EmptyResponse\" \x82\xd3\xe4\x93\x02\x1a*\x18/v1/posts/{post_id}/likeB\bZ\x06.;blogb\x06proto3"
 
 var (
 	file_blog_proto_rawDescOnce sync.Once
