@@ -42,21 +42,35 @@ func userIDFromContext(ctx context.Context) string {
 
 func (s *BlogService) GetPosts(ctx context.Context, req *blog.GetPostsRequest) (*blog.GetPostsResponse, error) {
 	var postsDB []models.Post
-	if err := s.db.Order("created_at desc").
-		Limit(int(req.Limit)).
-		Offset(int(req.Offset)).
-		Find(&postsDB).Error; err != nil {
-		return nil, err
+	cacheKey := "main:feed"
+	var hasCache = false
+	if req.Limit == 10 && req.Offset == 0 {
+		cached, err := s.redisClient.Get(ctx, cacheKey).Result()
+		if err == nil {
+			var cachedPosts []models.Post
+			if err := json.Unmarshal([]byte(cached), &cachedPosts); err == nil {
+				postsDB = cachedPosts
+				hasCache = true
+			}
+		}
+	}
+
+	if !hasCache {
+		if err := s.db.Order("created_at desc").
+			Limit(int(req.Limit)).
+			Offset(int(req.Offset)).
+			Find(&postsDB).Error; err != nil {
+			return nil, err
+		}
+
+		if req.Limit == 10 && req.Offset == 0 {
+			data, _ := json.Marshal(postsDB)
+			s.redisClient.Set(ctx, cacheKey, data, 30*time.Second)
+		}
 	}
 
 	userID := userIDFromContext(ctx)
 	posts := make([]*blog.Post, len(postsDB))
-
-	if req.Offset == 0 && req.Limit == 10 {
-		cacheKey := "main:feed"
-		data, _ := json.Marshal(postsDB)
-		s.redisClient.Set(ctx, cacheKey, data, 30*time.Second)
-	}
 
 	pipe := s.redisClient.Pipeline()
 	likeCounts := make([]*redis.IntCmd, len(postsDB))
