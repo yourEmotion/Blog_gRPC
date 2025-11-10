@@ -1,0 +1,31 @@
+2025-11-08 21:21:03.284 MSK [13261] LOG:  starting PostgreSQL 14.18 (Homebrew) on aarch64-apple-darwin23.6.0, compiled by Apple clang version 16.0.0 (clang-1600.0.26.6), 64-bit
+2025-11-08 21:21:03.286 MSK [13261] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2025-11-08 21:21:03.286 MSK [13261] LOG:  listening on IPv6 address "::1", port 5432
+2025-11-08 21:21:03.286 MSK [13261] LOG:  listening on Unix socket "/tmp/.s.PGSQL.5432"
+2025-11-08 21:21:03.288 MSK [13262] LOG:  database system was shut down at 2025-11-08 21:20:53 MSK
+2025-11-08 21:21:03.290 MSK [13261] LOG:  database system is ready to accept connections
+2025-11-08 21:21:25.698 MSK [13370] FATAL:  role "postgres" does not exist
+2025-11-08 21:21:45.157 MSK [13444] FATAL:  database "ermachine" does not exist
+2025-11-08 21:22:27.238 MSK [13611] ERROR:  syntax error at or near "1" at character 1
+2025-11-08 21:22:27.238 MSK [13611] STATEMENT:  1
+	select
+	;
+2025-11-08 21:23:27.937 MSK [13611] ERROR:  database "blog" already exists
+2025-11-08 21:23:27.937 MSK [13611] STATEMENT:  CREATE DATABASE blog;
+2025-11-08 21:23:34.240 MSK [13611] ERROR:  syntax error at or near "DATABASE" at character 8
+2025-11-08 21:23:34.240 MSK [13611] STATEMENT:  DELETE DATABASE postgres;
+2025-11-08 21:23:39.452 MSK [13611] ERROR:  cannot drop the currently open database
+2025-11-08 21:23:39.452 MSK [13611] STATEMENT:  DROP DATABASE postgres;
+2025-11-08 21:30:36.681 MSK [16211] ERROR:  relation "blog" does not exist at character 16
+2025-11-08 21:30:36.681 MSK [16211] STATEMENT:  select *  from blog;
+2025-11-08 21:32:47.911 MSK [16236] ERROR:  syntax error at or near "table" at character 15
+2025-11-08 21:32:47.911 MSK [16236] STATEMENT:  select * from table;
+2025-11-08 21:32:51.473 MSK [16236] ERROR:  relation "blog.table" does not exist at character 15
+2025-11-08 21:32:51.473 MSK [16236] STATEMENT:  select * from blog.table;
+2025-11-08 21:38:15.085 MSK [13261] LOG:  received fast shutdown request
+2025-11-08 21:38:15.085 MSK [13261] LOG:  aborting any active transactions
+2025-11-08 21:38:15.086 MSK [17979] FATAL:  terminating connection due to administrator command
+2025-11-08 21:38:15.086 MSK [16236] FATAL:  terminating connection due to administrator command
+2025-11-08 21:38:15.086 MSK [13261] LOG:  background worker "logical replication launcher" (PID 13268) exited with exit code 1
+2025-11-08 21:38:15.087 MSK [13263] LOG:  shutting down
+2025-11-08 21:38:15.091 MSK [13261] LOG:  database system is shut down

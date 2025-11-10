@@ -7,12 +7,28 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 	blog "github.com/yourEmotion/Blog_gRPC/api/go"
 	"github.com/yourEmotion/Blog_gRPC/internal/models"
 	"google.golang.org/grpc/metadata"
 	"gorm.io/gorm"
 )
+
+// Метрика времени Redis для лайков
+// Для анализа времени ответа Redis выбрал Histogram
+// Так удобнее отыскивать среднее, медиану и отлавливать хвосты (медленные запросы)
+var (
+	redisLikesDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "redis_likes_duration_seconds",
+		Help:    "Time taken to fetch likes from Redis",
+		Buckets: prometheus.DefBuckets,
+	})
+)
+
+func init() {
+	prometheus.MustRegister(redisLikesDuration)
+}
 
 type BlogService struct {
 	blog.UnimplementedBlogServiceServer
@@ -38,6 +54,21 @@ func userIDFromContext(ctx context.Context) string {
 		return ""
 	}
 	return vals[0]
+}
+
+func execRedisWithLogging(ctx context.Context, pipe redis.Pipeliner, operation string) error {
+	start := time.Now()
+	log.Printf("[REDIS START] %s", operation)
+	_, err := pipe.Exec(ctx)
+	duration := time.Since(start).Seconds()
+	if err != nil {
+		log.Printf("[REDIS ERROR] %s duration=%.3fs err=%v", operation, duration, err)
+	} else {
+		log.Printf("[REDIS END] %s duration=%.3fs", operation, duration)
+	}
+
+	redisLikesDuration.Observe(duration)
+	return err
 }
 
 func (s *BlogService) GetPosts(ctx context.Context, req *blog.GetPostsRequest) (*blog.GetPostsResponse, error) {
@@ -82,7 +113,8 @@ func (s *BlogService) GetPosts(ctx context.Context, req *blog.GetPostsRequest) (
 			likedByUser[i] = pipe.SIsMember(ctx, key, userID)
 		}
 	}
-	pipe.Exec(ctx)
+
+	execRedisWithLogging(ctx, pipe, "Get likes")
 
 	for i, p := range postsDB {
 		liked := false

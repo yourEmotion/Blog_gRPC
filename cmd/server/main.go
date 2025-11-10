@@ -13,10 +13,13 @@ import (
 
 	blog "github.com/yourEmotion/Blog_gRPC/api/go"
 	"github.com/yourEmotion/Blog_gRPC/internal/config"
+	"github.com/yourEmotion/Blog_gRPC/internal/middleware"
 	"github.com/yourEmotion/Blog_gRPC/internal/models"
 	"github.com/yourEmotion/Blog_gRPC/internal/service"
 
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 )
 
@@ -44,7 +47,20 @@ func main() {
 	}
 	log.Println("Connected to Redis!")
 
-	grpcSrv := grpc.NewServer()
+	grpcSrv := grpc.NewServer(
+		grpc.UnaryInterceptor(middleware.UnaryLoggingInterceptor()),
+	)
+	grpc_prometheus.Register(grpcSrv)
+	grpc_prometheus.EnableHandlingTimeHistogram()
+
+	go func() {
+		http.Handle("/metrics", promhttp.Handler())
+		log.Println("Prometheus metrics listening on :2112/metrics")
+		if err := http.ListenAndServe(":2112", nil); err != nil {
+			log.Fatalf("failed to serve metrics: %v", err)
+		}
+	}()
+
 	blog.RegisterBlogServiceServer(grpcSrv, service.NewBlogService(db, redisClient))
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *grpcPort))
