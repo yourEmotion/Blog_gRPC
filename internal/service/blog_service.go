@@ -11,6 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	blog "github.com/yourEmotion/Blog_gRPC/api/go"
 	"github.com/yourEmotion/Blog_gRPC/internal/models"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/metadata"
 	"gorm.io/gorm"
 )
@@ -56,25 +57,13 @@ func userIDFromContext(ctx context.Context) string {
 	return vals[0]
 }
 
-func execRedisWithLogging(ctx context.Context, pipe redis.Pipeliner, operation string) error {
-	start := time.Now()
-	log.Printf("[REDIS START] %s", operation)
-	_, err := pipe.Exec(ctx)
-	duration := time.Since(start).Seconds()
-	if err != nil {
-		log.Printf("[REDIS ERROR] %s duration=%.3fs err=%v", operation, duration, err)
-	} else {
-		log.Printf("[REDIS END] %s duration=%.3fs", operation, duration)
-	}
-
-	redisLikesDuration.Observe(duration)
-	return err
-}
-
 func (s *BlogService) GetPosts(ctx context.Context, req *blog.GetPostsRequest) (*blog.GetPostsResponse, error) {
 	var postsDB []models.Post
 	cacheKey := "main:feed"
 	var hasCache = false
+
+	zap.L().Info("Checking Redis cache", zap.String("key", cacheKey))
+
 	if req.Limit == 10 && req.Offset == 0 {
 		cached, err := s.redisClient.Get(ctx, cacheKey).Result()
 		if err == nil {
@@ -82,7 +71,10 @@ func (s *BlogService) GetPosts(ctx context.Context, req *blog.GetPostsRequest) (
 			if err := json.Unmarshal([]byte(cached), &cachedPosts); err == nil {
 				postsDB = cachedPosts
 				hasCache = true
+				zap.L().Info("Cache is used", zap.String("key", cacheKey))
 			}
+		} else {
+			zap.L().Info("Cache is missed", zap.String("key", cacheKey))
 		}
 	}
 
@@ -97,12 +89,14 @@ func (s *BlogService) GetPosts(ctx context.Context, req *blog.GetPostsRequest) (
 		if req.Limit == 10 && req.Offset == 0 {
 			data, _ := json.Marshal(postsDB)
 			s.redisClient.Set(ctx, cacheKey, data, 30*time.Second)
+			zap.L().Info("Cache updated", zap.String("key", cacheKey))
 		}
 	}
 
 	userID := userIDFromContext(ctx)
 	posts := make([]*blog.Post, len(postsDB))
 
+	start := time.Now()
 	pipe := s.redisClient.Pipeline()
 	likeCounts := make([]*redis.IntCmd, len(postsDB))
 	likedByUser := make([]*redis.BoolCmd, len(postsDB))
@@ -113,8 +107,13 @@ func (s *BlogService) GetPosts(ctx context.Context, req *blog.GetPostsRequest) (
 			likedByUser[i] = pipe.SIsMember(ctx, key, userID)
 		}
 	}
+	pipe.Exec(ctx)
+	duration := time.Since(start)
 
-	execRedisWithLogging(ctx, pipe, "Get likes")
+	zap.L().Info("Redis likes fetched",
+		zap.Int("count", len(postsDB)),
+		zap.Duration("duration", duration),
+	)
 
 	for i, p := range postsDB {
 		liked := false

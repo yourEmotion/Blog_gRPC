@@ -2,9 +2,9 @@ package middleware
 
 import (
 	"context"
-	"log"
 	"time"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
@@ -14,16 +14,21 @@ func UnaryLoggingInterceptor() grpc.UnaryServerInterceptor {
 		req interface{},
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
-	) (resp interface{}, err error) {
+	) (interface{}, error) {
+
 		start := time.Now()
-		log.Printf("[gRPC START] method=%s", info.FullMethod)
-		resp, err = handler(ctx, req)
-		duration := time.Since(start)
-		if err != nil {
-			log.Printf("[gRPC ERROR] method=%s duration=%s err=%v", info.FullMethod, duration, err)
-		} else {
-			log.Printf("[gRPC END] method=%s duration=%s", info.FullMethod, duration)
-		}
+		zap.L().Info("gRPC request started",
+			zap.String("method", info.FullMethod),
+		)
+
+		resp, err := handler(ctx, req)
+
+		zap.L().Info("gRPC request finished",
+			zap.String("method", info.FullMethod),
+			zap.Duration("duration", time.Since(start)),
+			zap.Error(err),
+		)
+
 		return resp, err
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -20,6 +19,7 @@ import (
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
@@ -30,34 +30,41 @@ var (
 
 func main() {
 	flag.Parse()
+	logger, _ := zap.NewProduction()
+	defer logger.Sync()
+	zap.ReplaceGlobals(logger)
+
+	zap.L().Info("Starting Blog gRPC service")
 
 	db, err := config.InitPostgres()
 	if err != nil {
-		log.Fatalf("failed to connect to Postgres: %v", err)
+		zap.L().Fatal("failed to connect to Postgres", zap.Error(err))
 	}
-	log.Println("Connected to Postgres!")
+	zap.L().Info("Connected to Postgres!")
 
 	if err := db.AutoMigrate(&models.Post{}); err != nil {
-		log.Fatalf("failed to migrate Postgres: %v", err)
+		zap.L().Fatal("failed to migrate Postgres", zap.Error(err))
 	}
 
 	redisClient, err := config.InitRedis(context.Background())
 	if err != nil {
-		log.Fatalf("failed to connect to Redis: %v", err)
+		zap.L().Fatal("failed to connect to Redis", zap.Error(err))
 	}
-	log.Println("Connected to Redis!")
+	zap.L().Info("Connected to Redis!")
 
 	grpcSrv := grpc.NewServer(
-		grpc.UnaryInterceptor(middleware.UnaryLoggingInterceptor()),
+		grpc.ChainUnaryInterceptor(
+			middleware.UnaryLoggingInterceptor(),
+			grpc_prometheus.UnaryServerInterceptor,
+		),
 	)
 	grpc_prometheus.Register(grpcSrv)
-	grpc_prometheus.EnableHandlingTimeHistogram()
 
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
-		log.Println("Prometheus metrics listening on :2112/metrics")
+		zap.L().Info("Prometheus metrics listening on :2112/metrics")
 		if err := http.ListenAndServe(":2112", nil); err != nil {
-			log.Fatalf("failed to serve metrics: %v", err)
+			zap.L().Fatal("failed to serve metrics", zap.Error(err))
 		}
 	}()
 
@@ -65,13 +72,13 @@ func main() {
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *grpcPort))
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		zap.L().Fatal("failed to listen", zap.Error(err))
 	}
 
 	go func() {
-		log.Printf("gRPC server listening on :%d", *grpcPort)
+		zap.L().Info("gRPC server started", zap.Int("port", *grpcPort))
 		if err := grpcSrv.Serve(lis); err != nil {
-			log.Fatalf("failed to serve gRPC: %v", err)
+			zap.L().Fatal("failed to serve gRPC", zap.Error(err))
 		}
 	}()
 
@@ -90,7 +97,7 @@ func main() {
 
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 	if err := blog.RegisterBlogServiceHandlerFromEndpoint(ctx, mux, fmt.Sprintf("localhost:%d", *grpcPort), opts); err != nil {
-		log.Fatalf("failed to start REST gateway: %v", err)
+		zap.L().Fatal("failed to start REST gateway", zap.Error(err))
 	}
 
 	httpMux := http.NewServeMux()
@@ -108,9 +115,9 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("REST gateway listening on :%d", *httpPort)
+		zap.L().Info("REST gateway started", zap.Int("port", *httpPort))
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("failed to serve HTTP: %v", err)
+			zap.L().Fatal("failed to serve HTTP", zap.Error(err))
 		}
 	}()
 
@@ -118,10 +125,10 @@ func main() {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 
-	log.Println("Shutting down...")
+	zap.L().Info("Shutting down...")
 	grpcSrv.GracefulStop()
 	if err := httpSrv.Shutdown(ctx); err != nil {
-		log.Fatalf("HTTP server shutdown failed: %v", err)
+		zap.L().Fatal("HTTP server shutdown failed", zap.Error(err))
 	}
-	log.Println("Servers stopped")
+	zap.L().Info("Servers stopped gracefully")
 }
